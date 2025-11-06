@@ -11,7 +11,7 @@ import ocsf.server.*;
  * superclass in order to give more functionality to the server.
  *
  * @author Dr Timothy C. Lethbridge
- * @author Dr Robert Lagani&egrave;re
+ * @author Dr Robert Lagani&egrave;
  * @author Fran&ccedil;ois B&eacute;langer
  * @author Paul Holden
  */
@@ -48,8 +48,39 @@ public class EchoServer extends AbstractServer
   public void handleMessageFromClient
     (Object msg, ConnectionToClient client)
   {
-    System.out.println("Message received: " + msg + " from " + client);
-    this.sendToAllClients(msg);
+    // *** CHANGED: minimal login & prefix logic
+    String text = String.valueOf(msg);
+    String id = (String) client.getInfo("loginID");
+
+    if (text.startsWith("#login")) {
+      System.out.println("Message received: " + text + " from " + id + ".");
+      if (id != null) {
+        try { client.sendToClient("ERROR - Already logged in."); } catch (Exception ignored) {}
+        try { client.close(); } catch (Exception ignored) {}
+        return;
+      }
+      String[] parts = text.split("\\s+", 2);
+      if (parts.length < 2 || parts[1].isEmpty()) {
+        try { client.sendToClient("ERROR - Login ID missing."); } catch (Exception ignored) {}
+        try { client.close(); } catch (Exception ignored) {}
+        return;
+      }
+      String loginId = parts[1].trim();
+      client.setInfo("loginID", loginId);
+      System.out.println(loginId + " has logged on.");
+      try { client.sendToClient(loginId + " has logged on."); } catch (Exception ignored) {}
+      return;
+    }
+
+    if (id == null) {
+      // not logged in yet
+      try { client.sendToClient("ERROR - You must login first."); } catch (Exception ignored) {}
+      try { client.close(); } catch (Exception ignored) {}
+      return;
+    }
+
+    System.out.println("Message received: " + text + " from " + id);
+    this.sendToAllClients(id + " > " + text);
   }
     
   /**
@@ -71,7 +102,19 @@ public class EchoServer extends AbstractServer
     System.out.println
       ("Server has stopped listening for connections.");
   }
-  
+
+  // *** ADDED: print on client connect/disconnect (Exercise 1c)
+  @Override
+  protected void clientConnected(ConnectionToClient client) {
+    System.out.println("A new client has connected to the server.");
+  }
+
+  @Override
+  synchronized protected void clientDisconnected(ConnectionToClient client) {
+    String id = (String) client.getInfo("loginID");
+    if (id != null) System.out.println(id + " has disconnected.");
+    else System.out.println("A client has disconnected.");
+  }
   
   //Class methods ***************************************************
   

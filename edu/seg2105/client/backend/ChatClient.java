@@ -28,7 +28,12 @@ public class ChatClient extends AbstractClient
    */
   ChatIF clientUI; 
 
-  
+  // *** ADDED: login id to satisfy Exercise 3(a)(b)
+  private final String loginID;
+
+  // *** ADDED: flag to distinguish user logoff vs server shutdown
+  private volatile boolean closingFromClient = false;
+
   //Constructors ****************************************************
   
   /**
@@ -42,8 +47,17 @@ public class ChatClient extends AbstractClient
   public ChatClient(String host, int port, ChatIF clientUI) 
     throws IOException 
   {
+    // *** CHANGED: keep original constructor for backward compatibility
+    this(host, port, clientUI, "anonymous"); // default id when old code path used
+  }
+
+  // *** ADDED: overloaded ctor with loginID (Exercise 3)
+  public ChatClient(String host, int port, ChatIF clientUI, String loginID)
+    throws IOException
+  {
     super(host, port); //Call the superclass constructor
     this.clientUI = clientUI;
+    this.loginID = loginID;
     openConnection();
   }
 
@@ -58,8 +72,17 @@ public class ChatClient extends AbstractClient
   public void handleMessageFromServer(Object msg) 
   {
     clientUI.display(msg.toString());
-    
-    
+  }
+
+  // *** ADDED: upon establishing connection, auto-send #login <loginID>
+  @Override
+  protected void connectionEstablished() {
+    try {
+      sendToServer("#login " + loginID);
+    } catch (IOException e) {
+      clientUI.display("ERROR - Can't setup connection! Terminating client.");
+      quit();
+    }
   }
 
   /**
@@ -81,6 +104,35 @@ public class ChatClient extends AbstractClient
     }
   }
   
+  // *** ADDED: clean message when server closed (Exercise 1a, tests)
+  @Override
+  protected void connectionClosed() {
+    if (!closingFromClient) {
+      clientUI.display("The server has shut down.");
+      System.exit(0);
+    }
+  }
+
+  // *** ADDED: also handle abnormal exceptions as shutdown
+  @Override
+  protected void connectionException(Exception exception) {
+    if (!closingFromClient) {
+      clientUI.display("The server has shut down.");
+      System.exit(0);
+    }
+  }
+
+  // *** ADDED: public logoff used by client console #logoff
+  public void logoff() {
+    try {
+      closingFromClient = true;
+      closeConnection();
+      clientUI.display("Connection closed.");
+    } catch (IOException e) {
+      // ignore
+    }
+  }
+
   /**
    * This method terminates the client.
    */
@@ -88,6 +140,7 @@ public class ChatClient extends AbstractClient
   {
     try
     {
+      closingFromClient = true; // *** ADDED
       closeConnection();
     }
     catch(IOException e) {}
